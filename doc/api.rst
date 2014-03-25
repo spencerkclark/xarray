@@ -108,13 +108,12 @@ Manipulating data
 
    DatasetArray.transpose
    DatasetArray.T
+   DatasetArray.dot
    DatasetArray.reduce
    DatasetArray.all
    DatasetArray.any
    DatasetArray.argmax
    DatasetArray.argmin
-   DatasetArray.cumprod
-   DatasetArray.cumsum
    DatasetArray.max
    DatasetArray.min
    DatasetArray.mean

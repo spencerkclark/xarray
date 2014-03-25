@@ -583,7 +583,7 @@ class Dataset(Mapping):
         return type(self)(variables, self.attributes)
 
     def unselect(self, *names):
-        """Returns a new dataset without the named variables
+        """Returns a new dataset without the named variables.
 
         Parameters
         ----------
