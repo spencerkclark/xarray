@@ -135,6 +135,14 @@ def assert_all_valid_date_type(data):
 
 
 class CFTimeIndex(pd.Index):
+    """Analog to a ``pandas.DatetimeIndex`` for use with ``cftime.datetime``
+    objects
+
+    Parameters
+    ----------
+    data : array_like
+        ``cftime.datetime`` objects for the index
+    """
     year = _field_accessor('year', 'The year of the datetime')
     month = _field_accessor('month', 'The month of the datetime')
     day = _field_accessor('day', 'The days of the datetime')

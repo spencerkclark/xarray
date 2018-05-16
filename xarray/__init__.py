@@ -20,6 +20,7 @@ from .backends.api import (open_dataset, open_dataarray, open_mfdataset,
 from .backends.rasterio_ import open_rasterio
 from .backends.zarr import open_zarr
 
+from .coding.cftimeindex import CFTimeIndex
 from .conventions import decode_cf, SerializationWarning
 
 try:
