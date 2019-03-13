@@ -10,6 +10,7 @@ import tempfile
 from typing import Optional
 import warnings
 from contextlib import ExitStack
+from distutils.version import LooseVersion
 from io import BytesIO
 
 import numpy as np
@@ -3368,6 +3369,8 @@ class MiscObject:
 @requires_netCDF4
 class TestValidateAttrs(object):
     def test_validating_attrs(self):
+        import netCDF4
+
         def new_dataset():
             return Dataset({'data': ('y', np.arange(10.0))},
                            {'y': np.arange(10)})
@@ -3402,6 +3405,13 @@ class TestValidateAttrs(object):
             attrs[''] = 'test'
             with raises_regex(ValueError, 'Invalid name for attr'):
                 ds.to_netcdf('test.nc')
+
+            if LooseVersion(netCDF4.__version__) >= LooseVersion('1.4.3.2'):
+                ds, attrs = new_dataset_and_attrs()
+                attrs['test'] = np.arange(12).reshape(3, 4)
+                with create_tmp_file() as tmp_file:
+                    with raises_regex(ValueError, 'multi-dimensional'):
+                        ds.to_netcdf(tmp_file)
 
             # This one should work
             ds, attrs = new_dataset_and_attrs()
@@ -3445,22 +3455,12 @@ class TestValidateAttrs(object):
                 ds.to_netcdf(tmp_file)
 
             ds, attrs = new_dataset_and_attrs()
-            attrs['test'] = np.arange(12).reshape(3, 4)
-            with create_tmp_file() as tmp_file:
-                ds.to_netcdf(tmp_file)
-
-            ds, attrs = new_dataset_and_attrs()
             attrs['test'] = 'This is a string'
             with create_tmp_file() as tmp_file:
                 ds.to_netcdf(tmp_file)
 
             ds, attrs = new_dataset_and_attrs()
             attrs['test'] = ''
-            with create_tmp_file() as tmp_file:
-                ds.to_netcdf(tmp_file)
-
-            ds, attrs = new_dataset_and_attrs()
-            attrs['test'] = np.arange(12).reshape(3, 4)
             with create_tmp_file() as tmp_file:
                 ds.to_netcdf(tmp_file)
 
