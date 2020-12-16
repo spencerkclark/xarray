@@ -576,6 +576,26 @@ class Second(BaseCFTimeOffset):
         return other + self.as_timedelta()
 
 
+class Millisecond(BaseCFTimeOffset):
+    _freq = "L"
+
+    def as_timedelta(self):
+        return timedelta(milliseconds=self.n)
+
+    def __apply__(self, other):
+        return other + self.as_timedelta()
+
+
+class Microsecond(BaseCFTimeOffset):
+    _freq = "U"
+
+    def as_timedelta(self):
+        return timedelta(microseconds=self.n)
+
+    def __apply__(self, other):
+        return other + self.as_timedelta()
+
+
 _FREQUENCIES = {
     "A": YearEnd,
     "AS": YearBegin,
@@ -590,6 +610,9 @@ _FREQUENCIES = {
     "T": Minute,
     "min": Minute,
     "S": Second,
+    "L": Millisecond,
+    "ms": Millisecond,
+    "U": Microsecond,
     "AS-JAN": partial(YearBegin, month=1),
     "AS-FEB": partial(YearBegin, month=2),
     "AS-MAR": partial(YearBegin, month=3),
