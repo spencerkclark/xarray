@@ -85,7 +85,6 @@ from .utils import (
     Default,
     Frozen,
     SortedKeysDict,
-    _check_inplace,
     _default,
     decode_numpy_dict_values,
     drop_dims_from_indexers,
@@ -359,20 +358,23 @@ def _assert_empty(args: tuple, msg: str = "%s") -> None:
         raise ValueError(msg % args)
 
 
-def _check_chunks_compatibility(var, chunks, chunk_spec):
+def _check_chunks_compatibility(var, chunks, preferred_chunks):
     for dim in var.dims:
-        if dim not in chunks or (dim not in chunk_spec):
+        if dim not in chunks or (dim not in preferred_chunks):
             continue
 
-        chunk_spec_dim = chunk_spec.get(dim)
+        preferred_chunks_dim = preferred_chunks.get(dim)
         chunks_dim = chunks.get(dim)
 
         if isinstance(chunks_dim, int):
             chunks_dim = (chunks_dim,)
-        if any(s % chunk_spec_dim for s in chunks_dim):
+        else:
+            chunks_dim = chunks_dim[:-1]
+
+        if any(s % preferred_chunks_dim for s in chunks_dim):
             warnings.warn(
                 f"Specified Dask chunks {chunks[dim]} would separate "
-                f"on disks chunk shape {chunk_spec[dim]} for dimension {dim}. "
+                f"on disks chunk shape {preferred_chunks[dim]} for dimension {dim}. "
                 "This could degrade performance. "
                 "Consider rechunking after loading instead.",
                 stacklevel=2,
@@ -390,8 +392,10 @@ def _get_chunk(var, chunks):
     if isinstance(chunks, int) or (chunks == "auto"):
         chunks = dict.fromkeys(var.dims, chunks)
 
-    preferred_chunks_list = var.encoding.get("chunks", {})
-    preferred_chunks = dict(zip(var.dims, var.encoding.get("chunks", {})))
+    preferred_chunks = var.encoding.get("preferred_chunks", {})
+    preferred_chunks_list = [
+        preferred_chunks.get(dim, shape) for dim, shape in zip(var.dims, var.shape)
+    ]
 
     chunks_list = [
         chunks.get(dim, None) or preferred_chunks.get(dim, None) for dim in var.dims
@@ -775,11 +779,11 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         Parameters
         ----------
         **kwargs : dict
-            Additional keyword arguments passed on to ``dask.array.compute``.
+            Additional keyword arguments passed on to ``dask.compute``.
 
         See Also
         --------
-        dask.array.compute
+        dask.compute
         """
         # access .data to coerce everything to numpy or dask arrays
         lazy_data = {
@@ -947,11 +951,11 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         Parameters
         ----------
         **kwargs : dict
-            Additional keyword arguments passed on to ``dask.array.compute``.
+            Additional keyword arguments passed on to ``dask.compute``.
 
         See Also
         --------
-        dask.array.compute
+        dask.compute
         """
         new = self.copy(deep=False)
         return new.load(**kwargs)
@@ -1527,9 +1531,7 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         """Dictionary of DataArray objects corresponding to data variables"""
         return DataVariables(self)
 
-    def set_coords(
-        self, names: "Union[Hashable, Iterable[Hashable]]", inplace: bool = None
-    ) -> "Dataset":
+    def set_coords(self, names: "Union[Hashable, Iterable[Hashable]]") -> "Dataset":
         """Given names of one or more variables, set them as coordinates
 
         Parameters
@@ -1549,7 +1551,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         # DataFrame.set_index?
         # nb. check in self._variables, not self.data_vars to insure that the
         # operation is idempotent
-        _check_inplace(inplace)
         if isinstance(names, str) or not isinstance(names, Iterable):
             names = [names]
         else:
@@ -1563,7 +1564,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         self,
         names: "Union[Hashable, Iterable[Hashable], None]" = None,
         drop: bool = False,
-        inplace: bool = None,
     ) -> "Dataset":
         """Given names of coordinates, reset them to become variables
 
@@ -1580,7 +1580,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         -------
         Dataset
         """
-        _check_inplace(inplace)
         if names is None:
             names = self._coord_names - set(self.dims)
         else:
@@ -3151,9 +3150,7 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         )
         return self._replace(variables, coord_names, dims=dims, indexes=indexes)
 
-    def swap_dims(
-        self, dims_dict: Mapping[Hashable, Hashable], inplace: bool = None
-    ) -> "Dataset":
+    def swap_dims(self, dims_dict: Mapping[Hashable, Hashable]) -> "Dataset":
         """Returns a new object with swapped dimensions.
 
         Parameters
@@ -3212,7 +3209,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         """
         # TODO: deprecate this method in favor of a (less confusing)
         # rename_dims() method that only renames dimensions.
-        _check_inplace(inplace)
         for k, v in dims_dict.items():
             if k not in self.dims:
                 raise ValueError(
@@ -3387,7 +3383,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         self,
         indexes: Mapping[Hashable, Union[Hashable, Sequence[Hashable]]] = None,
         append: bool = False,
-        inplace: bool = None,
         **indexes_kwargs: Union[Hashable, Sequence[Hashable]],
     ) -> "Dataset":
         """Set Dataset (multi-)indexes using one or more existing coordinates
@@ -3442,7 +3437,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         Dataset.reset_index
         Dataset.swap_dims
         """
-        _check_inplace(inplace)
         indexes = either_dict_or_kwargs(indexes, indexes_kwargs, "set_index")
         variables, coord_names = merge_indexes(
             indexes, self._variables, self._coord_names, append=append
@@ -3453,7 +3447,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         self,
         dims_or_levels: Union[Hashable, Sequence[Hashable]],
         drop: bool = False,
-        inplace: bool = None,
     ) -> "Dataset":
         """Reset the specified index(es) or multi-index level(s).
 
@@ -3475,7 +3468,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         --------
         Dataset.set_index
         """
-        _check_inplace(inplace)
         variables, coord_names = split_indexes(
             dims_or_levels,
             self._variables,
@@ -3488,7 +3480,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
     def reorder_levels(
         self,
         dim_order: Mapping[Hashable, Sequence[int]] = None,
-        inplace: bool = None,
         **dim_order_kwargs: Sequence[int],
     ) -> "Dataset":
         """Rearrange index levels using input order.
@@ -3509,7 +3500,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
             Another dataset, with this dataset's data but replaced
             coordinates.
         """
-        _check_inplace(inplace)
         dim_order = either_dict_or_kwargs(dim_order, dim_order_kwargs, "reorder_levels")
         variables = self._variables.copy()
         indexes = dict(self.indexes)
@@ -3812,7 +3802,7 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
             result = result._unstack_once(dim, fill_value, sparse)
         return result
 
-    def update(self, other: "CoercibleMapping", inplace: bool = None) -> "Dataset":
+    def update(self, other: "CoercibleMapping") -> "Dataset":
         """Update this dataset's variables with those from another dataset.
 
         Parameters
@@ -3838,14 +3828,12 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
             If any dimensions would have inconsistent sizes in the updated
             dataset.
         """
-        _check_inplace(inplace)
         merge_result = dataset_update_method(self, other)
         return self._replace(inplace=True, **merge_result._asdict())
 
     def merge(
         self,
         other: Union["CoercibleMapping", "DataArray"],
-        inplace: bool = None,
         overwrite_vars: Union[Hashable, Iterable[Hashable]] = frozenset(),
         compat: str = "no_conflicts",
         join: str = "outer",
@@ -3901,7 +3889,6 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
         MergeError
             If any variables conflict (see ``compat``).
         """
-        _check_inplace(inplace)
         other = other.to_dataset() if isinstance(other, xr.DataArray) else other
         merge_result = dataset_merge_method(
             self,
