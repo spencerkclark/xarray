@@ -79,6 +79,9 @@ Bug fixes
   in NumPy 2.0 (:issue:`9312`, :pull:`9393`)
   By `Andrew Scherer <https://github.com/andrew-s28>`_.
 
+- Add :py:property:`~core.accessor_dt.DatetimeAccessor.days_in_year` and :py:property:`~core.accessor_dt.DatetimeAccessor.decimal_year` to the Datetime accessor on DataArrays. (:pull:` `).
+  By `Pascal Bourgault <https://github.com/aulemahal>`_.
+
 Performance
 ~~~~~~~~~~~
 
