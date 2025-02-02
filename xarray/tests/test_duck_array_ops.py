@@ -44,6 +44,8 @@ from xarray.tests import (
     requires_pyarrow,
 )
 
+INT64_MIN = np.iinfo(np.int64).min
+INT64_MAX = np.iinfo(np.int64).max
 dask_array_type = array_type("dask")
 
 
@@ -413,19 +415,28 @@ def assert_dask_array(da, dask):
 @arm_xfail
 @pytest.mark.filterwarnings("ignore:All-NaN .* encountered:RuntimeWarning")
 @pytest.mark.parametrize("dask", [False, True] if has_dask else [False])
-def test_datetime_mean(dask: bool, time_unit: PDDatetimeUnitOptions) -> None:
+@pytest.mark.parametrize(
+    ("values", "expected_nanmean"),
+    [
+        (["2010-01-01", "NaT", "2010-01-03", "NaT", "NaT"], "2010-01-02"),
+        ([INT64_MIN + 1, "NaT", INT64_MAX, "NaT", "NaT"], "1970-01-01"),
+    ],
+)
+def test_datetime_mean(
+    dask: bool,
+    values: list[str | int],
+    expected_nanmean: str,
+    time_unit: PDDatetimeUnitOptions,
+) -> None:
     # Note: only testing numpy, as dask is broken upstream
     dtype = f"M8[{time_unit}]"
-    da = DataArray(
-        np.array(["2010-01-01", "NaT", "2010-01-03", "NaT", "NaT"], dtype=dtype),
-        dims=["time"],
-    )
+    da = DataArray(np.array(values, dtype=dtype), dims=["time"])
     if dask:
         # Trigger use case where a chunk is full of NaT
         da = da.chunk({"time": 3})
 
-    expect = DataArray(np.array("2010-01-02", dtype="M8[ns]"))
-    expect_nat = DataArray(np.array("NaT", dtype="M8[ns]"))
+    expect = DataArray(np.array(expected_nanmean, dtype=dtype))
+    expect_nat = DataArray(np.array("NaT", dtype=dtype))
 
     actual = da.mean()
     if dask:
@@ -436,16 +447,23 @@ def test_datetime_mean(dask: bool, time_unit: PDDatetimeUnitOptions) -> None:
     if dask:
         assert actual.chunks is not None
     assert_equal(actual, expect_nat)
+    assert actual.dtype == expect.dtype
 
     # tests for 1d array full of NaT
     assert_equal(da[[1]].mean(), expect_nat)
     assert_equal(da[[1]].mean(skipna=False), expect_nat)
+    assert da[[1]].mean().dtype == expect_nat.dtype
+    assert da[[1]].mean(skipna=False).dtype == expect_nat.dtype
 
     # tests for a 0d array
     assert_equal(da[0].mean(), da[0])
     assert_equal(da[0].mean(skipna=False), da[0])
     assert_equal(da[1].mean(), expect_nat)
     assert_equal(da[1].mean(skipna=False), expect_nat)
+    assert da[0].mean().dtype == expect.dtype
+    assert da[0].mean(skipna=False).dtype == expect.dtype
+    assert da[1].mean().dtype == expect_nat.dtype
+    assert da[1].mean(skipna=False).dtype == expect_nat.dtype
 
 
 @requires_cftime
